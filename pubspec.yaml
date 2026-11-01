@@ -1,7 +1,7 @@
 name: agb_left_wing_books
 description: Perpustakaan pemikiran kiri - AGB Left-Wing Books.
 publish_to: 'none'
-version: 0.3.4+7
+version: 0.3.5+8
 
 environment:
   sdk: '>=3.3.0 <4.0.0'
@@ -11,6 +11,7 @@ dependencies:
     sdk: flutter
   google_fonts: ^6.2.1
   share_plus: ^10.1.4
+  shared_preferences: ^2.3.2
 
 dev_dependencies:
   flutter_launcher_icons: ^0.14.1

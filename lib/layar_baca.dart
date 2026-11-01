@@ -5,6 +5,8 @@ import 'package:share_plus/share_plus.dart';
 
 import 'data_buku.dart';
 import 'paginasi.dart';
+import 'simpanan.dart';
+import 'sumber.dart';
 import 'tema.dart';
 
 /// Pembaca buku: halaman digeser ke samping, ada sampul, nomor halaman,
@@ -37,12 +39,62 @@ class _LayarBacaState extends State<LayarBaca> {
   bool _selesai = false;
   int _idx = 0;
 
+  // Posisi terakhir dibaca (dipulihkan otomatis) dan status favorit.
+  int _target = 0;
+  bool _targetSiap = false;
+  bool _sudahLompat = false;
+  bool _favorit = false;
+
   late final TextStyle _gayaBaca = gayaIsi(16.5, tinggi: 1.6);
 
   @override
   void initState() {
     super.initState();
     _muat();
+    _muatPosisi();
+  }
+
+  Future<void> _muatPosisi() async {
+    final id = widget.buku.id;
+    final hal = await Simpanan.ambilHalaman(id);
+    final fav = (await Simpanan.favorit()).contains(id);
+    if (!mounted) return;
+    setState(() {
+      _target = hal;
+      _favorit = fav;
+      _targetSiap = true;
+    });
+    _cobaLompat();
+  }
+
+  /// Setelah halaman cukup tersusun, loncat ke halaman terakhir dibaca.
+  void _cobaLompat() {
+    if (_sudahLompat || !_targetSiap) return;
+    if (_target <= 0) {
+      _sudahLompat = true;
+      return;
+    }
+    if (_halaman.length >= _target || _selesai) {
+      _sudahLompat = true;
+      final tujuan = _target > _halaman.length ? _halaman.length : _target;
+      if (tujuan <= 0) return;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || !_pc.hasClients) return;
+        _pc.jumpToPage(tujuan);
+      });
+    }
+  }
+
+  Future<void> _ubahFavorit() async {
+    final baru = await Simpanan.ubahFavorit(widget.buku.id);
+    if (!mounted) return;
+    setState(() => _favorit = baru);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(baru ? 'Ditambahkan ke favorit.' : 'Dihapus dari favorit.'),
+        duration: const Duration(seconds: 2),
+      ),
+    );
   }
 
   @override
@@ -143,6 +195,8 @@ class _LayarBacaState extends State<LayarBaca> {
           _halaman = halaman;
           _selesai = selesai;
         });
+        _cobaLompat();
+        if (selesai) Simpanan.simpanTotal(widget.buku.id, halaman.length);
       },
     );
   }
@@ -202,15 +256,17 @@ class _LayarBacaState extends State<LayarBaca> {
                 style: gayaIsi(14, warna: Warna.teksRedup),
               ),
               const SizedBox(height: 16),
-              Text(
-                'Sumber teks',
-                style: gayaLabel(12.5, berat: FontWeight.w600),
-              ),
-              const SizedBox(height: 4),
-              SelectableText(
-                _sumber.isEmpty ? 'Tidak dicantumkan.' : _sumber,
-                style: gayaIsi(13.5, tinggi: 1.45),
-              ),
+              if (labelSumber(_sumber).isNotEmpty) ...[
+                Text(
+                  'Sumber',
+                  style: gayaLabel(12.5, berat: FontWeight.w600),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  labelSumber(_sumber),
+                  style: gayaIsi(14, tinggi: 1.45),
+                ),
+              ],
               if (_mesin) ...[
                 const SizedBox(height: 12),
                 Text(
@@ -219,17 +275,11 @@ class _LayarBacaState extends State<LayarBaca> {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  'Terjemahan mesin otomatis (Argos Translate, Inggris ke Indonesia), '
-                  'tanpa penyuntingan manusia'
+                  'Terjemahan mesin otomatis, tanpa penyuntingan manusia'
                   '${_persen.isEmpty ? '' : ', sudah $_persen diterjemahkan'}.',
                   style: gayaIsi(13.5, tinggi: 1.45),
                 ),
               ],
-              const SizedBox(height: 14),
-              Text(
-                'Teks diambil dari arsip publik. Terjemahan bisa memiliki hak cipta penerjemah.',
-                style: gayaIsi(12.5, warna: Warna.teksRedup, tinggi: 1.45),
-              ),
             ],
           ),
         );
@@ -276,16 +326,28 @@ class _LayarBacaState extends State<LayarBaca> {
             ),
           ),
           IconButton(
+            visualDensity: VisualDensity.compact,
+            onPressed: _ubahFavorit,
+            icon: Icon(
+              _favorit ? Icons.bookmark_rounded : Icons.bookmark_border_rounded,
+              color: Warna.biru,
+            ),
+            tooltip: _favorit ? 'Hapus dari favorit' : 'Tambah ke favorit',
+          ),
+          IconButton(
+            visualDensity: VisualDensity.compact,
             onPressed: _teks == null ? null : _salin,
             icon: const Icon(Icons.copy_rounded, color: Warna.biru),
             tooltip: 'Salin halaman',
           ),
           IconButton(
+            visualDensity: VisualDensity.compact,
             onPressed: _teks == null ? null : _bagikan,
             icon: const Icon(Icons.ios_share_rounded, color: Warna.biru),
             tooltip: 'Bagikan halaman',
           ),
           IconButton(
+            visualDensity: VisualDensity.compact,
             onPressed: _infoBuku,
             icon: const Icon(Icons.info_outline_rounded, color: Warna.biru),
             tooltip: 'Info buku',
@@ -340,8 +402,8 @@ class _LayarBacaState extends State<LayarBaca> {
     if (_gagalMuat) return _pesanTengah(
       Icons.cloud_off_rounded,
       'Isi buku belum tersedia',
-      'Isi diunduh otomatis oleh GitHub saat APK dibangun. Untuk buku ini, '
-          'sumbernya belum berhasil diambil. Cek catatan build di GitHub.',
+      'Isi buku ini belum ada di dalam aplikasi. '
+          'Coba pasang versi aplikasi yang lebih baru.',
     );
     if (_teks == null) {
       return const Center(child: CircularProgressIndicator(color: Warna.biru));
@@ -370,7 +432,14 @@ class _LayarBacaState extends State<LayarBaca> {
         return PageView.builder(
           controller: _pc,
           itemCount: total,
-          onPageChanged: (i) => setState(() => _idx = i),
+          onPageChanged: (i) {
+            setState(() => _idx = i);
+            Simpanan.simpanPosisi(
+              widget.buku.id,
+              i,
+              _selesai ? _halaman.length : 0,
+            );
+          },
           itemBuilder: (context, i) {
             return AnimatedBuilder(
               animation: _pc,

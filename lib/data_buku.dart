@@ -1,4 +1,4 @@
-const String versiAplikasi = '0.3.4';
+const String versiAplikasi = '0.3.5';
 
 class Buku {
   final String id;
@@ -31,8 +31,7 @@ const List<String> daftarKategori = [
   'Pemikiran Indonesia',
 ];
 
-// Katalog awal (Tahap 1). Status hak cipta masih draf dan akan diperiksa
-// ulang di tahap terakhir. Terjemahan Indonesia bisa punya hak cipta sendiri.
+// Katalog buku.
 const List<Buku> daftarBuku = [
   Buku(
     id: 'manifesto',
@@ -586,7 +585,7 @@ const List<Buku> daftarBuku = [
   ),
   Buku(
     id: 'kapital1_bag1',
-    judul: 'Kapital I, Bagian 1 (terjemahan Indonesia, belum lengkap)',
+    judul: 'Kapital I, Bagian 1 (belum lengkap)',
     penulis: 'Karl Marx',
     tahun: '1867',
     kategori: 'Marxisme',
@@ -636,7 +635,7 @@ const List<Buku> daftarBuku = [
   ),
   Buku(
     id: 'apa_dikerjakan',
-    judul: 'Apa yang Harus Dikerjakan? (terjemahan belum selesai)',
+    judul: 'Apa yang Harus Dikerjakan? (belum lengkap)',
     penulis: 'V.I. Lenin',
     tahun: '1902',
     kategori: 'Marxisme',

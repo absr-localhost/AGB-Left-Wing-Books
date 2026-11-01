@@ -3,6 +3,9 @@ import 'package:flutter/services.dart';
 
 import 'data_buku.dart';
 import 'layar_baca.dart';
+import 'layar_tentang.dart';
+import 'simpanan.dart';
+import 'sumber.dart';
 import 'tema.dart';
 
 class LayarBeranda extends StatefulWidget {
@@ -16,10 +19,81 @@ class _LayarBerandaState extends State<LayarBeranda> {
   String _kategori = 'Semua';
   String _kata = '';
 
+  // Data pembaca: favorit, riwayat, dan posisi terakhir tiap buku.
+  Set<String> _fav = <String>{};
+  List<String> _riwayat = <String>[];
+  final Map<String, int> _hal = <String, int>{};
+  final Map<String, int> _tot = <String, int>{};
+
+  @override
+  void initState() {
+    super.initState();
+    _muatSimpanan();
+  }
+
+  Future<void> _muatSimpanan() async {
+    final fav = await Simpanan.favorit();
+    final riw = await Simpanan.riwayat();
+    final hal = <String, int>{};
+    final tot = <String, int>{};
+    for (final id in riw) {
+      hal[id] = await Simpanan.ambilHalaman(id);
+      tot[id] = await Simpanan.ambilTotal(id);
+    }
+    if (!mounted) return;
+    setState(() {
+      _fav = fav;
+      _riwayat = riw;
+      _hal
+        ..clear()
+        ..addAll(hal);
+      _tot
+        ..clear()
+        ..addAll(tot);
+    });
+  }
+
+  Future<void> _ubahFavorit(Buku b) async {
+    await Simpanan.ubahFavorit(b.id);
+    await _muatSimpanan();
+  }
+
+  List<String> get _daftarChip => <String>[
+        'Semua',
+        'Favorit',
+        ...daftarKategori.where((k) => k != 'Semua'),
+      ];
+
+  void _bukaBaca(Buku b) {
+    Navigator.of(context)
+        .push(
+          PageRouteBuilder<void>(
+            transitionDuration: const Duration(milliseconds: 450),
+            pageBuilder: (c, a, s) => LayarBaca(buku: b),
+            transitionsBuilder: (c, a, s, child) {
+              return FadeTransition(
+                opacity: a,
+                child: SlideTransition(
+                  position: Tween<Offset>(
+                    begin: const Offset(0, 0.04),
+                    end: Offset.zero,
+                  ).animate(CurvedAnimation(parent: a, curve: Curves.easeOutCubic)),
+                  child: child,
+                ),
+              );
+            },
+          ),
+        )
+        .then((_) => _muatSimpanan());
+  }
+
   List<Buku> get _hasil {
     final k = _kata.trim().toLowerCase();
     return daftarBuku.where((b) {
-      final cocokKategori = _kategori == 'Semua' || b.kategori == _kategori;
+      final cocokKategori = _kategori == 'Semua' ||
+          (_kategori == 'Favorit'
+              ? _fav.contains(b.id)
+              : b.kategori == _kategori);
       final cocokKata = k.isEmpty ||
           b.judul.toLowerCase().contains(k) ||
           b.penulis.toLowerCase().contains(k);
@@ -36,26 +110,10 @@ class _LayarBerandaState extends State<LayarBeranda> {
       builder: (ctx) {
         return _LembarDetail(
           buku: b,
+          lanjut: _hal[b.id] ?? 0,
           onBaca: () {
             Navigator.of(ctx).pop();
-            Navigator.of(context).push(
-              PageRouteBuilder<void>(
-                transitionDuration: const Duration(milliseconds: 450),
-                pageBuilder: (c, a, s) => LayarBaca(buku: b),
-                transitionsBuilder: (c, a, s, child) {
-                  return FadeTransition(
-                    opacity: a,
-                    child: SlideTransition(
-                      position: Tween<Offset>(
-                        begin: const Offset(0, 0.04),
-                        end: Offset.zero,
-                      ).animate(CurvedAnimation(parent: a, curve: Curves.easeOutCubic)),
-                      child: child,
-                    ),
-                  );
-                },
-              ),
-            );
+            _bukaBaca(b);
           },
           onSalin: () {
             Clipboard.setData(
@@ -72,20 +130,14 @@ class _LayarBerandaState extends State<LayarBeranda> {
   }
 
   void _tentang() {
-    showAboutDialog(
-      context: context,
-      applicationName: 'AGB Left-Wing Books',
-      applicationVersion: versiAplikasi,
-      applicationLegalese:
-          'Status hak cipta buku masih draf dan akan diperiksa ulang. '
-          'Terjemahan Indonesia bisa punya hak cipta sendiri.',
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(builder: (_) => const LayarTentang()),
     );
   }
 
   @override
   Widget build(BuildContext context) {
     final hasil = _hasil;
-    final jumlahBebas = daftarBuku.where((b) => b.bebasHakCipta).length;
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: SystemUiOverlayStyle.dark,
@@ -95,7 +147,8 @@ class _LayarBerandaState extends State<LayarBeranda> {
           child: CustomScrollView(
             slivers: [
               SliverToBoxAdapter(child: _kepala()),
-              SliverToBoxAdapter(child: _spanduk(daftarBuku.length, jumlahBebas)),
+              SliverToBoxAdapter(child: _spanduk(daftarBuku.length)),
+              SliverToBoxAdapter(child: _lanjutkan()),
               SliverToBoxAdapter(child: _kolomCari()),
               SliverToBoxAdapter(child: _deretanKategori()),
               SliverToBoxAdapter(
@@ -126,6 +179,8 @@ class _LayarBerandaState extends State<LayarBeranda> {
                     delegate: SliverChildBuilderDelegate(
                       (context, i) => _KartuBuku(
                         buku: hasil[i],
+                        favorit: _fav.contains(hasil[i].id),
+                        onFavorit: () => _ubahFavorit(hasil[i]),
                         indeks: i,
                         warnaIndeks: daftarBuku.indexOf(hasil[i]),
                         onTap: () => _bukaDetail(hasil[i]),
@@ -138,7 +193,7 @@ class _LayarBerandaState extends State<LayarBeranda> {
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(20, 8, 20, 28),
                   child: Text(
-                    'Versi $versiAplikasi. Status hak cipta masih draf.',
+                    'AGB Left-Wing Books  \u2022  Versi $versiAplikasi',
                     textAlign: TextAlign.center,
                     style: gayaLabel(12),
                   ),
@@ -180,7 +235,7 @@ class _LayarBerandaState extends State<LayarBeranda> {
     );
   }
 
-  Widget _spanduk(int jumlah, int bebas) {
+  Widget _spanduk(int jumlah) {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 20),
       padding: const EdgeInsets.all(22),
@@ -219,7 +274,7 @@ class _LayarBerandaState extends State<LayarBeranda> {
               ),
               const SizedBox(height: 10),
               Text(
-                'Katalog awal dari Marx sampai Tan Malaka.',
+                'Dari Marx sampai Tan Malaka.',
                 style: gayaIsi(
                   13.5,
                   warna: const Color.fromRGBO(255, 255, 255, 0.82),
@@ -230,10 +285,91 @@ class _LayarBerandaState extends State<LayarBeranda> {
                 children: [
                   _pil('$jumlah judul'),
                   const SizedBox(width: 8),
-                  _pil('$bebas bebas hak cipta'),
+                  _pil('Gratis'),
                 ],
               ),
             ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _lanjutkan() {
+    final buku = <Buku>[];
+    for (final id in _riwayat) {
+      final i = daftarBuku.indexWhere((b) => b.id == id);
+      if (i >= 0) buku.add(daftarBuku[i]);
+      if (buku.length >= 6) break;
+    }
+    if (buku.isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(top: 22),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            child: Text('Lanjutkan membaca', style: gayaJudul(18)),
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            height: 104,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              itemCount: buku.length,
+              separatorBuilder: (context, i) => const SizedBox(width: 12),
+              itemBuilder: (context, i) {
+                final b = buku[i];
+                final h = _hal[b.id] ?? 0;
+                final t = _tot[b.id] ?? 0;
+                final double? nilai =
+                    t > 0 ? (h / t).clamp(0.0, 1.0).toDouble() : null;
+                return GestureDetector(
+                  onTap: () => _bukaBaca(b),
+                  child: Container(
+                    width: 250,
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: Warna.biruMuda,
+                      borderRadius: BorderRadius.circular(18),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: Text(
+                            b.judul,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: gayaJudul(14, tinggi: 1.25),
+                          ),
+                        ),
+                        if (nilai != null) ...[
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(4),
+                            child: LinearProgressIndicator(
+                              value: nilai,
+                              minHeight: 5,
+                              color: Warna.biru,
+                              backgroundColor: Warna.garis,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                        ],
+                        Text(
+                          t > 0
+                              ? 'Halaman $h dari $t'
+                              : (h > 0 ? 'Halaman $h' : 'Sampul'),
+                          style: gayaLabel(12, warna: Warna.biru),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
           ),
         ],
       ),
@@ -289,10 +425,10 @@ class _LayarBerandaState extends State<LayarBeranda> {
         child: ListView.separated(
           scrollDirection: Axis.horizontal,
           padding: const EdgeInsets.symmetric(horizontal: 20),
-          itemCount: daftarKategori.length,
+          itemCount: _daftarChip.length,
           separatorBuilder: (context, i) => const SizedBox(width: 8),
           itemBuilder: (context, i) {
-            final k = daftarKategori[i];
+            final k = _daftarChip[i];
             final aktif = k == _kategori;
             return GestureDetector(
               onTap: () => setState(() => _kategori = k),
@@ -328,10 +464,17 @@ class _LayarBerandaState extends State<LayarBeranda> {
         children: [
           const Icon(Icons.search_off_rounded, size: 44, color: Warna.biruCerah),
           const SizedBox(height: 12),
-          Text('Tidak ada buku yang cocok', style: gayaJudul(15)),
+          Text(
+            _kategori == 'Favorit'
+                ? 'Belum ada buku favorit'
+                : 'Tidak ada buku yang cocok',
+            style: gayaJudul(15),
+          ),
           const SizedBox(height: 6),
           Text(
-            'Coba kata kunci lain atau pilih kategori Semua.',
+            _kategori == 'Favorit'
+                ? 'Tekan ikon penanda di sampul buku untuk menambahkannya.'
+                : 'Coba kata kunci lain atau pilih kategori Semua.',
             textAlign: TextAlign.center,
             style: gayaIsi(13.5, warna: Warna.teksRedup),
           ),
@@ -351,12 +494,16 @@ const List<List<Color>> _warnaSampul = [
 
 class _KartuBuku extends StatelessWidget {
   final Buku buku;
+  final bool favorit;
+  final VoidCallback onFavorit;
   final int indeks;
   final int warnaIndeks;
   final VoidCallback onTap;
 
   const _KartuBuku({
     required this.buku,
+    required this.favorit,
+    required this.onFavorit,
     required this.indeks,
     required this.warnaIndeks,
     required this.onTap,
@@ -428,8 +575,26 @@ class _KartuBuku extends StatelessWidget {
                         ),
                       ),
                     ),
+                    Positioned(
+                      right: 2,
+                      top: 2,
+                      child: GestureDetector(
+                        onTap: onFavorit,
+                        behavior: HitTestBehavior.opaque,
+                        child: Padding(
+                          padding: const EdgeInsets.all(8),
+                          child: Icon(
+                            favorit
+                                ? Icons.bookmark_rounded
+                                : Icons.bookmark_border_rounded,
+                            size: 22,
+                            color: Warna.putih,
+                          ),
+                        ),
+                      ),
+                    ),
                     Padding(
-                      padding: const EdgeInsets.fromLTRB(22, 18, 14, 14),
+                      padding: const EdgeInsets.fromLTRB(22, 18, 34, 14),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
@@ -505,11 +670,13 @@ class _KartuBuku extends StatelessWidget {
 
 class _LembarDetail extends StatelessWidget {
   final Buku buku;
+  final int lanjut;
   final VoidCallback onBaca;
   final VoidCallback onSalin;
 
   const _LembarDetail({
     required this.buku,
+    required this.lanjut,
     required this.onBaca,
     required this.onSalin,
   });
@@ -573,8 +740,10 @@ class _LembarDetail extends StatelessWidget {
                   Expanded(
                     child: Text(
                       buku.bebasHakCipta
-                          ? 'Bebas hak cipta. Isi diunduh otomatis dari arsip publik saat APK dibangun. Teks berbahasa Inggris diterjemahkan otomatis oleh mesin dan diberi label \"terjemahan mesin\".'
-                          : 'Masih berhak cipta. Hanya info buku yang ditampilkan, isi penuh tidak disertakan.',
+                          ? (sumberBuku(buku).isEmpty
+                              ? 'Isi lengkap tersedia di dalam aplikasi.'
+                              : 'Sumber: ${sumberBuku(buku)}')
+                          : 'Hanya info buku yang ditampilkan.',
                       style: gayaIsi(13.5, tinggi: 1.45),
                     ),
                   ),
@@ -592,7 +761,9 @@ class _LembarDetail extends StatelessWidget {
                 ),
               ),
               child: Text(
-                buku.bebasHakCipta ? 'Baca buku' : 'Isi penuh tidak tersedia',
+                buku.bebasHakCipta
+                    ? (lanjut > 0 ? 'Lanjutkan membaca' : 'Baca buku')
+                    : 'Isi penuh tidak tersedia',
                 style: gayaJudul(15, warna: Warna.putih, berat: FontWeight.w500),
               ),
             ),
