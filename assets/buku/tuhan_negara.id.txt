@@ -1,0 +1,37 @@
+#JUDUL: Tuhan dan Negara
+#SUMBER: https://www.gutenberg.org/files/20677/20677-readme.txt
+#BAHASA: id
+#TERJEMAHAN: mesin
+#PROGRES: 16/16
+
+Pembacaan suara ini dari Tuhan dan Negara dibaca oleh
+
+CarlManchester
+
+Isi
+
+♪ Bab 00 - 00: 02: 52
+
+♪ Bab 01 - 00: 33: 38
+
+# Bab 02 - 00: 49: 24
+
+♪ Bab 03 - 00: 33: 24
+
+♪ Bab 04 - 00: 49: 23
+
+♪ Bab 05 - 00: 24: 49
+
+Librivox Audio Recording Public Domain Sertifikasi:
+
+Orang atau orang yang terkait bekerja dengan dokumen ini ("Dedicator" atau "Casperer") dengan ini baik (a) sertifikat yang terbaik dari pengetahuannya, karya otoritas diidentifikasi berada di domain publik negara dari mana pekerjaan diterbitkan, atau (b) dengan ini mendedikasikan hak cipta apapun yang dipegang para pengguna dalam karya otoritas yang diidentifikasi di bawah (the "Work") ke domain publik. Sebuah sertifikat, apalagi, mendedikasikan setiap kepentingan hak cipta ia mungkin memiliki dalam pekerjaan yang terkait, dan untuk tujuan ini, digambarkan sebagai "dedikasi" di bawah.
+
+Sebuah sertifikat telah mengambil langkah yang masuk akal untuk memverifikasi status hak cipta pekerjaan ini. Tabier mengakui bahwa upaya iman yang baik mungkin tidak melindunginya dari kewajiban jika kenyataannya pekerjaan bersertifikat tidak di domain publik.
+
+Dedicator membuat dedikasi ini untuk kepentingan masyarakat pada umumnya dan merugikan pewaris dan penerus Dedicator. Dedicator menginginkan dedikasi ini untuk menjadi tindakan yang berlebihan dalam selamanya melepaskan semua hak-hak sekarang dan masa depan di bawah hukum hak cipta, apakah diberikan atau kontingen, dalam karya. Dediksi memahami bahwa melepaskan semua hak termasuk pembebasan hak untuk menegakkan (dengan gugatan atau sebaliknya) hak cipta tersebut dalam Pekerjaan.
+
+Dedicator mengakui bahwa, sekali ditempatkan di domain publik, Pekerjaan dapat secara bebas diproduksi ulang, didistribusikan, ditransmisikan, digunakan, dimodifikasi, dibangun di atas, atau dieksploitasi oleh siapa pun untuk tujuan apapun, komersial atau non- komersial, dan dengan cara apapun, termasuk oleh metode yang belum ditemukan atau dikandung.
+
+Format audio tersedia:
+
+128kbit MP3 - MP3 subfolder 64kbit Ogg Vorbis (rate bit variabel) - OGG subfolder Apple AAC audiobook (16kbit mono) - M4B subfolder Speex - SPX subfolder
