@@ -1,19 +1,36 @@
 name: Build APK
 
+# Satu alur kerja untuk semuanya:
+# 1. Membuka ZIP yang diunggah (kalau ada) dan menyimpan isinya ke repo.
+# 2. Membangun APK awal (cepat, untuk cek) dan menerjemahkan semua buku
+#    Inggris dengan mesin (otomatis, paralel, bisa berlanjut sendiri).
+# 3. Menyimpan hasil terjemahan ke repo lalu membangun APK akhir.
+
 on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      putaran:
+        description: 'Putaran lanjutan terjemahan (diisi otomatis)'
+        required: false
+        default: '0'
 
 permissions:
   contents: write
+  actions: write
 
 jobs:
-  build:
+  siapkan:
     runs-on: ubuntu-latest
+    outputs:
+      ada: ${{ steps.cek.outputs.ada }}
+      ids: ${{ steps.cek.outputs.ids }}
     steps:
       - name: Ambil kode
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
 
       - name: Buka ZIP otomatis (kalau ada)
         run: |
@@ -26,8 +43,31 @@ jobs:
             git config user.email actions@github.com
             git add -A
             git commit -m "Buka ZIP: $Z" || true
+            git pull --rebase origin ${{ github.ref_name }} || true
             git push
           fi
+
+      - name: Cek isi repo
+        id: cek
+        run: |
+          if [ -f lib/main.dart ] && [ -f tool/daftar_en.py ]; then
+            echo "ada=true" >> "$GITHUB_OUTPUT"
+            echo "ids=$(python3 tool/daftar_en.py)" >> "$GITHUB_OUTPUT"
+          else
+            echo "ada=false" >> "$GITHUB_OUTPUT"
+            echo "ids=[]" >> "$GITHUB_OUTPUT"
+            echo "Kode belum ada di repo. Unggah ZIP-nya dulu."
+          fi
+
+  apk_awal:
+    needs: siapkan
+    if: ${{ needs.siapkan.outputs.ada == 'true' && (inputs.putaran || '0') == '0' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ambil kode
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
 
       - name: Pasang Java
         uses: actions/setup-java@v4
@@ -76,5 +116,166 @@ jobs:
       - name: Unggah APK
         uses: actions/upload-artifact@v4
         with:
-          name: AGB-Left-Wing-Books-v0.3.4
+          name: AGB-Left-Wing-Books-v0.3.5-awal
+          path: build/app/outputs/flutter-apk/app-release.apk
+
+  terjemah:
+    needs: siapkan
+    if: ${{ needs.siapkan.outputs.ada == 'true' && needs.siapkan.outputs.ids != '[]' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 355
+    strategy:
+      fail-fast: false
+      matrix:
+        id: ${{ fromJSON(needs.siapkan.outputs.ids) }}
+    steps:
+      - name: Ambil kode
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+
+      - name: Pasang Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Pasang mesin terjemah
+        run: pip install argostranslate
+
+      - name: Pasang pdftotext
+        run: which pdftotext || sudo apt-get install -y poppler-utils
+
+      - name: Unduh teks asli
+        run: python3 tool/unduh_buku.py ${{ matrix.id }}
+
+      - name: Terjemahkan
+        run: python3 tool/terjemah.py ${{ matrix.id }} --batas-menit 335
+
+      - name: Simpan hasil
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: terjemahan-${{ matrix.id }}
+          path: assets/buku/${{ matrix.id }}.id.txt
+          if-no-files-found: ignore
+
+  simpan:
+    needs: [siapkan, terjemah]
+    if: ${{ always() && needs.siapkan.outputs.ada == 'true' }}
+    runs-on: ubuntu-latest
+    outputs:
+      ada_hasil: ${{ steps.simpan.outputs.ada_hasil }}
+    steps:
+      - name: Ambil kode
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+
+      - name: Ambil hasil terjemahan
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          pattern: terjemahan-*
+          path: /tmp/hasil
+          merge-multiple: true
+
+      - name: Simpan ke repo
+        id: simpan
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          echo "ada_hasil=false" >> "$GITHUB_OUTPUT"
+          if ! ls /tmp/hasil/*.id.txt >/dev/null 2>&1; then
+            echo "Tidak ada hasil baru."; exit 0
+          fi
+          cp /tmp/hasil/*.id.txt assets/buku/
+          git config user.name github-actions
+          git config user.email actions@github.com
+          git add assets/buku/*.id.txt
+          if git diff --cached --quiet; then
+            echo "Tidak ada perubahan."; exit 0
+          fi
+          git commit -m "Terjemahan mesin: perbarui hasil"
+          for i in 1 2 3 4 5; do
+            git pull --rebase origin ${{ github.ref_name }} && git push && break
+            sleep 5
+          done
+          echo "ada_hasil=true" >> "$GITHUB_OUTPUT"
+
+          # Masih ada buku yang terjemahannya belum selesai? Jalankan lagi (maks 8 putaran).
+          BELUM=$(python3 - <<'PY'
+          import glob, re
+          n = 0
+          for f in glob.glob('assets/buku/*.id.txt'):
+              kepala = open(f, encoding='utf-8').read(600)
+              m = re.search(r'#PROGRES:\s*(\d+)/(\d+)', kepala)
+              if m and int(m.group(1)) < int(m.group(2)):
+                  n += 1
+          print(n)
+          PY
+          )
+          PUTARAN='${{ inputs.putaran || '0' }}'
+          echo "Belum selesai: $BELUM buku, putaran $PUTARAN"
+          if [ "$BELUM" -gt 0 ] && [ "$PUTARAN" -lt 8 ]; then
+            gh workflow run build.yml --ref ${{ github.ref_name }} -f putaran=$((PUTARAN + 1))
+          fi
+
+  apk_akhir:
+    needs: [siapkan, simpan]
+    if: ${{ always() && needs.siapkan.outputs.ada == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ambil kode
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+
+      - name: Pasang Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Pasang Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Buat folder Android
+        run: |
+          cp -r lib /tmp/lib_cadangan
+          cp pubspec.yaml /tmp/pubspec_cadangan.yaml
+          flutter create . --platforms=android --org id.agb --project-name agb_left_wing_books
+          rm -rf lib
+          cp -r /tmp/lib_cadangan lib
+          cp /tmp/pubspec_cadangan.yaml pubspec.yaml
+          rm -rf test
+
+      - name: Pasang pdftotext
+        run: which pdftotext || sudo apt-get install -y poppler-utils
+
+      - name: Unduh isi buku
+        continue-on-error: true
+        run: python3 tool/unduh_buku.py
+
+      - name: Atur nama aplikasi dan izin internet
+        run: |
+          M=android/app/src/main/AndroidManifest.xml
+          sed -i 's/android:label="[^"]*"/android:label="AGB Left-Wing Books"/' $M
+          sed -i 's#<application#<uses-permission android:name="android.permission.INTERNET"/>\n    <application#' $M
+
+      - name: Ambil paket
+        run: flutter pub get
+
+      - name: Buat ikon aplikasi
+        run: dart run flutter_launcher_icons
+
+      - name: Bangun APK
+        run: flutter build apk --release
+
+      - name: Unggah APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: AGB-Left-Wing-Books-v0.3.5
           path: build/app/outputs/flutter-apk/app-release.apk
