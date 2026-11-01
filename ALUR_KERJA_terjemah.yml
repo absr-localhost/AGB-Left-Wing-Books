@@ -1,0 +1,101 @@
+name: Terjemahan mesin
+
+# Dijalankan MANUAL: tab Actions > Terjemahan mesin > Run workflow.
+# Tiap buku berbahasa Inggris diterjemahkan di tugas terpisah (paralel).
+# Hasil disimpan ke repo sebagai assets/buku/<id>.id.txt dan bisa dilanjutkan.
+
+on:
+  workflow_dispatch:
+    inputs:
+      buku:
+        description: 'id buku (contoh: negara_revolusi) atau "semua"'
+        default: 'semua'
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  daftar:
+    runs-on: ubuntu-latest
+    outputs:
+      ids: ${{ steps.ambil.outputs.ids }}
+    steps:
+      - name: Ambil kode
+        uses: actions/checkout@v4
+      - name: Daftar buku Inggris
+        id: ambil
+        run: echo "ids=$(python3 tool/daftar_en.py)" >> "$GITHUB_OUTPUT"
+
+  terjemah:
+    needs: daftar
+    runs-on: ubuntu-latest
+    timeout-minutes: 355
+    strategy:
+      fail-fast: false
+      matrix:
+        id: ${{ fromJSON(needs.daftar.outputs.ids) }}
+    steps:
+      - name: Ambil kode
+        if: ${{ inputs.buku == 'semua' || inputs.buku == matrix.id }}
+        uses: actions/checkout@v4
+
+      - name: Pasang Python
+        if: ${{ inputs.buku == 'semua' || inputs.buku == matrix.id }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Pasang mesin terjemah
+        if: ${{ inputs.buku == 'semua' || inputs.buku == matrix.id }}
+        run: pip install argostranslate
+
+      - name: Pasang pdftotext
+        if: ${{ inputs.buku == 'semua' || inputs.buku == matrix.id }}
+        run: which pdftotext || sudo apt-get install -y poppler-utils
+
+      - name: Unduh teks asli
+        if: ${{ inputs.buku == 'semua' || inputs.buku == matrix.id }}
+        run: python3 tool/unduh_buku.py ${{ matrix.id }}
+
+      - name: Terjemahkan
+        if: ${{ inputs.buku == 'semua' || inputs.buku == matrix.id }}
+        run: python3 tool/terjemah.py ${{ matrix.id }} --batas-menit 335
+
+      - name: Simpan hasil
+        if: ${{ always() && (inputs.buku == 'semua' || inputs.buku == matrix.id) }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: terjemahan-${{ matrix.id }}
+          path: assets/buku/${{ matrix.id }}.id.txt
+          if-no-files-found: ignore
+
+  simpan:
+    needs: terjemah
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ambil kode
+        uses: actions/checkout@v4
+
+      - name: Ambil hasil terjemahan
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          pattern: terjemahan-*
+          path: /tmp/hasil
+          merge-multiple: true
+
+      - name: Simpan ke repo
+        run: |
+          if ls /tmp/hasil/*.id.txt >/dev/null 2>&1; then
+            cp /tmp/hasil/*.id.txt assets/buku/
+          else
+            echo "Tidak ada hasil baru."; exit 0
+          fi
+          git config user.name "github-actions"
+          git config user.email "github-actions@users.noreply.github.com"
+          git add assets/buku/*.id.txt
+          git diff --cached --quiet && { echo "Tidak ada perubahan."; exit 0; }
+          git commit -m "Terjemahan mesin: perbarui hasil"
+          for i in 1 2 3; do git pull --rebase origin main && git push && break; sleep 5; done

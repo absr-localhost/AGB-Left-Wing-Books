@@ -1,0 +1,23 @@
+AGB Left-Wing Books - Rilis 0.3.4 (Tahap 3, bagian C)
+Belum dikompilasi dan belum diuji. Hasil unduhan baru terlihat saat build.
+
+YANG BARU DI 0.3.4
+- 9 judul yang hanya info (tanpa isi) dihapus dari rak. Kategori Teori Kritis disembunyikan sementara karena kosong. Total 72 judul, semuanya punya alamat isi.
+
+YANG BARU DI 0.3.3
+- 16 karya Marx, Engels, Lenin, Trotsky dalam TERJEMAHAN INDONESIA dari Marxists.org (alamat sudah diperiksa di daftar isi arsip): Kerja-Upahan dan Kapital, Kemiskinan Filsafat, Prinsip-Prinsip Komunisme, Perang Tani di Jerman, Keluarga Suci, Tesis Feuerbach, Feuerbach dan Akhir Filsafat Klasik Jerman, Kera ke Manusia, Pengantar Kritik Ekonomi Politik, Kapital I Bagian 1, Anti-Dühring, Kapital II, Kapital III, Masalah Perumahan, Apa yang Harus Dikerjakan?, Revolusi Permanen.
+- Brumaire, Upah Harga dan Laba, Sosialisme Utopis, Negara dan Revolusi: sekarang memakai terjemahan Indonesia dulu. Kalau gagal, otomatis pakai teks Inggris (lalu terjemahan mesin).
+- 10 karya dunia berbahasa Inggris (dicari otomatis di Project Gutenberg): Perang Saudara di Prancis, Kautsky, Plekhanov, Malatesta, Owen, Komunisme Sayap Kiri, Sepuluh Hari yang Mengguncang Dunia, Kropotkin (2), Pamflet Junius. Yang tidak ditemukan dilewati.
+- 4 judul hanya info (masih berhak cipta): Gramsci, Mao, Marcuse, Lukacs.
+- Skrip unduh bisa membaca PDF (pdftotext), sumber cadangan, dan halaman tanpa bab.
+- Alur Terjemahan mesin kini membaca daftar buku otomatis dari tool/sumber_buku.json.
+
+PERLU ANDA TAHU
+- Terjemahan Indonesia di Marxists.org dibuat relawan. Lisensi tiap terjemahan belum saya periksa. Pastikan lewat indonesia@marxists.org sebelum APK disebarkan.
+- Kualitas hasil PDF (Anti-Dühring, Kapital II, III) belum teruji: bisa ada nomor halaman atau potongan kata nyasar.
+
+LANGKAH (HP)
+1. Repo > Add file > Upload files. Ekstrak ZIP, unggah SEMUA isinya (timpa). Commit changes.
+2. Tab Actions > Build APK. Lihat langkah "Unduh isi buku": Berhasil dan Dilewati.
+3. Terjemahan: Actions > Terjemahan mesin > Run workflow ("semua" atau satu id).
+Jika .github tidak terunggah: Add file > Create new file, nama .github/workflows/build.yml (isi dari ALUR_KERJA_build.yml) dan .github/workflows/terjemah.yml (isi dari ALUR_KERJA_terjemah.yml).
